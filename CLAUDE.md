@@ -102,17 +102,6 @@ MODEL_REGISTRY = {
 
 Do not hardcode benchmark logic for a specific model. The benchmark should call the shared loader interface only.
 
-## Dataset Guidelines
-
-Use a labeled retrieval dataset with these components:
-
-- Corpus documents
-- Queries
-- Query-document relevance labels
-
-The benchmark harness should treat dataset loading separately from model loading.
-
-For local CPU development, prefer small datasets first. Avoid defaulting to very large datasets that make the benchmark slow or expensive.
 
 ## Benchmarking Logic
 
@@ -177,30 +166,7 @@ Keep a stable mapping from index row number to corpus document ID.
 - Store the sampled document IDs so visualizations are reproducible.
 - Avoid interpreting UMAP plots as definitive quality measurements. They are exploratory visualizations.
 
-## Adapter Training Guidelines
 
-`training/train_adapter.py` should:
-
-- Load paired domain data.
-- Use a contrastive learning objective.
-- Train for a small number of epochs by default.
-- Save adapter artifacts under `results/<model>_adapter/`.
-- Keep CPU defaults conservative.
-
-`training/evaluate_adapter.py` should:
-
-- Load the base model and adapter.
-- Run the same benchmark pipeline as the base model.
-- Save results using the same JSON schema.
-- Make before/after comparison easy in `benchmarks/compare.py`.
-
-## Performance Guidelines
-
-- Batch corpus encoding.
-- Avoid loading the full benchmark dataset when a smaller debug mode is requested.
-- Provide `--limit-corpus` and `--limit-queries` options for fast smoke tests.
-- Log total encode time separately for corpus and queries.
-- Record hardware notes manually in the final report.
 
 ## CLI Expectations
 
@@ -214,22 +180,7 @@ python benchmarks/run_benchmark.py --model model_a --dataset data/<dataset_name>
 python benchmarks/compare.py --results-dir results/ --output results/comparison.csv
 ```
 
-## Documentation Expectations
 
-When updating the README:
-
-- Keep examples generic.
-- Do not mention specific model names unless requested.
-- Explain the purpose of each script.
-- Include quickstart commands.
-- Include expected result file formats.
-
-When updating the final notebook:
-
-- Include tables for retrieval quality, latency, cost, and dimensionality.
-- Include UMAP plots.
-- Include before/after adapter results.
-- Clearly state dataset, split, hardware, and pricing assumptions.
 
 ## Common Pitfalls
 
@@ -237,7 +188,6 @@ When updating the final notebook:
 - Mixing integer and string document IDs.
 - Comparing UMAP plots generated from different document samples.
 - Reporting latency without batch size or hardware context.
-- Comparing costs without a pricing date.
 - Letting model-specific code leak into the benchmark harness.
 - Running a full-size dataset before validating the pipeline on a small subset.
 
@@ -250,5 +200,4 @@ When making changes:
 3. Prefer small, testable functions.
 4. Add comments only where they clarify non-obvious behavior.
 5. Update README or notebook instructions when CLI behavior changes.
-6. Avoid adding heavyweight dependencies unless they are necessary.
-7. Do not add concrete model names to docs unless the user explicitly asks.
+6. Avoid adding heavyweight GPU-based dependencies as this is for a local system.
