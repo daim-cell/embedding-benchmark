@@ -105,28 +105,6 @@ Recommended workflow:
 3. Run a single model benchmark end-to-end.
 4. Scale to additional models only after the first benchmark works.
 
-## Model Registry
-
-All embedding models should be exposed through a shared interface:
-
-```python
-def embed(texts: list[str]) -> np.ndarray:
-    ...
-```
-
-The model registry should map a short model key to a loader configuration. This allows the benchmark harness to run models interchangeably without changing benchmark logic.
-
-Example concept:
-
-```python
-MODEL_REGISTRY = {
-    "model_a": {"loader": "sentence_transformer", "path": "..."},
-    "model_b": {"loader": "api_provider", "path": "..."},
-    "model_c": {"loader": "custom_remote", "path": "..."},
-}
-```
-
-Before integrating a model into the benchmark harness, test it independently with a small batch of sentences.
 
 ## Running Benchmarks
 
@@ -168,20 +146,6 @@ Example result format:
 }
 ```
 
-## Comparing Results
-
-After running benchmarks for multiple models, aggregate the results:
-
-```bash
-python benchmarks/compare.py --results-dir results/ --output results/comparison.csv
-```
-
-The comparison table should include:
-
-| Model | Embedding Dim | MRR@10 | NDCG@10 | Avg Latency / Embedding (ms) | Total Corpus Encode Time |
-|---|---:|---:|---:|---:|---:|
-| model_a | 768 | 0.000 | 0.000 | 0.0 | 0.0 |
-| model_b | 1024 | 0.000 | 0.000 | 0.0 | 0.0 |
 
 ## UMAP Visualization
 
@@ -214,44 +178,6 @@ Training objective:
 - In-batch negatives should be pushed farther apart.
 - The adapter should improve retrieval on the target domain without requiring full model retraining.
 
-Run training:
-
-```bash
-python training/train_adapter.py \
-  --base-model model_a \
-  --train-data data/domain_pairs.jsonl \
-  --output-dir results/model_a_adapter/
-```
-
-Then evaluate before and after:
-
-```bash
-python training/evaluate_adapter.py \
-  --base-model model_a \
-  --adapter-path results/model_a_adapter/ \
-  --dataset data/<dataset_name> \
-  --output results/model_a_adapter_results.json
-```
-
-## Final Report
-
-The final report should be written as a Jupyter notebook and include:
-
-- Dataset summary.
-- Model configuration table.
-- Retrieval metrics table.
-- Latency comparison.
-- Cost-per-usage comparison.
-- Embedding dimension comparison.
-- UMAP visualizations.
-- Before/after adapter performance.
-- Practical recommendations based on quality, speed, and cost.
-
-Start the notebook:
-
-```bash
-jupyter notebook notebooks/final_report.ipynb
-```
 
 ## Development Milestones
 
@@ -291,15 +217,5 @@ jupyter notebook notebooks/final_report.ipynb
 - Re-run benchmark after fine-tuning.
 - Compare before/after metrics.
 
-## Notes
 
-- Keep benchmark conditions consistent across models.
-- Use the same dataset split for every model.
-- Use the same corpus sample for UMAP visualizations.
-- Record hardware details when reporting latency.
-- Avoid comparing cost without clearly stating the pricing snapshot date.
-- CPU benchmarks are useful for reproducibility but may not reflect production GPU latency.
 
-## License
-
-MIT License. See `LICENSE` for details.
