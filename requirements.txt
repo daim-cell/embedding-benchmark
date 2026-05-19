@@ -1,0 +1,5 @@
+numpy
+tqdm
+sentence-transformers
+umap-learn
+beir
