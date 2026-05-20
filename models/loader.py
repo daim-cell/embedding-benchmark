@@ -1,6 +1,23 @@
 from abc import ABC, abstractmethod
-from sentence_transformers import SentenceTransformer
+import os
+from pathlib import Path
+
+import cohere
+from dotenv import load_dotenv
 import numpy as np
+import openai
+from sentence_transformers import SentenceTransformer
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
+
+def _get_api_key(env_var: str) -> str:
+    key = os.environ.get(env_var)
+    if not key:
+        raise EnvironmentError(
+            f"API key not found. Set {env_var} in your .env file or environment."
+        )
+    return key
 
 
 class BaseEmbedder(ABC):
@@ -37,12 +54,7 @@ class BaseEmbedder(ABC):
 class SentenceTransformerEmbedder(BaseEmbedder):
 
     def __init__(self, model_id: str, embedding_dim: int, trust_remote_code: bool = False) -> None:
-
-        try:
-            self._model = SentenceTransformer(model_id, trust_remote_code=trust_remote_code)
-        except Exception as e:
-            raise RuntimeError(f"Failed to load model '{model_id}': {e}") from e
-
+        self._model = SentenceTransformer(model_id, trust_remote_code=trust_remote_code)
         self._embedding_dim = embedding_dim
 
     @property
@@ -61,6 +73,82 @@ class SentenceTransformerEmbedder(BaseEmbedder):
             show_progress_bar=False,
         )
         embeddings = embeddings.astype(np.float32)
+        self._validate_output(texts, embeddings)
+        return embeddings
+
+
+class OpenAIEmbedder(BaseEmbedder):
+
+    def __init__(self, model_id: str, embedding_dim: int) -> None:
+        self._client = openai.OpenAI(api_key=_get_api_key("OPENAI_API_KEY"))
+        self._model_id = model_id
+        self._embedding_dim = embedding_dim
+
+    @property
+    def embedding_dim(self) -> int:
+        return self._embedding_dim
+
+    def embed(self, texts: list[str], batch_size: int = 32) -> np.ndarray:
+        if len(texts) == 0:
+            return np.empty((0, self._embedding_dim), dtype=np.float32)
+
+        all_embeddings: list[np.ndarray] = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            response = self._client.embeddings.create(input=batch, model=self._model_id)
+            batch_vecs = np.array(
+                [item.embedding for item in response.data], dtype=np.float32
+            )
+            # OpenAI does not return unit-normalized vectors by default.
+            norms = np.linalg.norm(batch_vecs, axis=1, keepdims=True)
+            batch_vecs = batch_vecs / np.where(norms == 0, 1.0, norms)
+            all_embeddings.append(batch_vecs)
+
+        embeddings = np.vstack(all_embeddings)
+        self._validate_output(texts, embeddings)
+        return embeddings
+
+
+class CohereEmbedder(BaseEmbedder):
+
+    DOC_INPUT_TYPE = "search_document"
+    QUERY_INPUT_TYPE = "search_query"
+    _MAX_BATCH = 96  # Cohere hard limit per request
+
+    def __init__(self, model_id: str, embedding_dim: int) -> None:
+        self._client = cohere.Client(api_key=_get_api_key("COHERE_API_KEY"))
+        self._model_id = model_id
+        self._embedding_dim = embedding_dim
+
+    @property
+    def embedding_dim(self) -> int:
+        return self._embedding_dim
+
+    def embed(
+        self,
+        texts: list[str],
+        batch_size: int = 32,
+        input_type: str = DOC_INPUT_TYPE,
+    ) -> np.ndarray:
+        if len(texts) == 0:
+            return np.empty((0, self._embedding_dim), dtype=np.float32)
+
+        effective_batch = min(batch_size, self._MAX_BATCH)
+        all_embeddings: list[np.ndarray] = []
+        for i in range(0, len(texts), effective_batch):
+            batch = texts[i : i + effective_batch]
+            response = self._client.embed(
+                texts=batch,
+                model=self._model_id,
+                input_type=input_type,
+            )
+            batch_vecs = np.array(response.embeddings, dtype=np.float32)
+            # Cohere v3 embeddings are unit-normalized; normalize defensively.
+            norms = np.linalg.norm(batch_vecs, axis=1, keepdims=True)
+            batch_vecs = batch_vecs / np.where(norms == 0, 1.0, norms)
+            all_embeddings.append(batch_vecs)
+
+        embeddings = np.vstack(all_embeddings)
         self._validate_output(texts, embeddings)
         return embeddings
 

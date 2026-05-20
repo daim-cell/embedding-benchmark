@@ -1,8 +1,8 @@
-from models.loader import BaseEmbedder, NomicEmbedder, SentenceTransformerEmbedder
+from models.loader import BaseEmbedder, CohereEmbedder, NomicEmbedder, OpenAIEmbedder, SentenceTransformerEmbedder
 
 MODEL_REGISTRY: dict[str, dict] = {
     "bge_m3": {
-        "type": "sentence_transformer",
+        "type": "bge",
         "model_id": "BAAI/bge-base-en-v1.5",
         "embedding_dim": 768,
         "normalize_embeddings": True,
@@ -17,6 +17,18 @@ MODEL_REGISTRY: dict[str, dict] = {
         "doc_prefix": "search_document:",
         "query_prefix": "search_query:",
     },
+    "openai_3_small": {
+        "type": "openai",
+        "model_id": "text-embedding-3-small",
+        "embedding_dim": 1536,
+    },
+    "cohere_en_v3": {
+        "type": "cohere",
+        "model_id": "embed-english-v3.0",
+        "embedding_dim": 1024,
+        "doc_input_type": "search_document",
+        "query_input_type": "search_query",
+    },
 }
 
 
@@ -29,7 +41,7 @@ def get_embedder(model_key: str) -> BaseEmbedder:
 
     config = MODEL_REGISTRY[model_key]
 
-    if config["type"] == "sentence_transformer":
+    if config["type"] == "bge":
         return SentenceTransformerEmbedder(
             model_id=config["model_id"],
             embedding_dim=config["embedding_dim"],
@@ -37,6 +49,18 @@ def get_embedder(model_key: str) -> BaseEmbedder:
 
     if config["type"] == "nomic":
         return NomicEmbedder(
+            model_id=config["model_id"],
+            embedding_dim=config["embedding_dim"],
+        )
+
+    if config["type"] == "openai":
+        return OpenAIEmbedder(
+            model_id=config["model_id"],
+            embedding_dim=config["embedding_dim"],
+        )
+
+    if config["type"] == "cohere":
+        return CohereEmbedder(
             model_id=config["model_id"],
             embedding_dim=config["embedding_dim"],
         )

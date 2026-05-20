@@ -1,6 +1,9 @@
 numpy
 tqdm
 einops
+python-dotenv
 sentence-transformers
+openai
+cohere
 umap-learn
 beir
