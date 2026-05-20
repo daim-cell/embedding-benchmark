@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-
+from sentence_transformers import SentenceTransformer
 import numpy as np
 
 
@@ -36,17 +36,10 @@ class BaseEmbedder(ABC):
 
 class SentenceTransformerEmbedder(BaseEmbedder):
 
-    def __init__(self, model_id: str, embedding_dim: int) -> None:
-        try:
-            from sentence_transformers import SentenceTransformer
-        except ImportError as e:
-            raise ImportError(
-                "sentence-transformers is required. "
-                "Install it with: pip install sentence-transformers"
-            ) from e
+    def __init__(self, model_id: str, embedding_dim: int, trust_remote_code: bool = False) -> None:
 
         try:
-            self._model = SentenceTransformer(model_id)
+            self._model = SentenceTransformer(model_id, trust_remote_code=trust_remote_code)
         except Exception as e:
             raise RuntimeError(f"Failed to load model '{model_id}': {e}") from e
 
@@ -62,6 +55,36 @@ class SentenceTransformerEmbedder(BaseEmbedder):
 
         embeddings = self._model.encode(
             texts,
+            batch_size=batch_size,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )
+        embeddings = embeddings.astype(np.float32)
+        self._validate_output(texts, embeddings)
+        return embeddings
+
+
+class NomicEmbedder(SentenceTransformerEmbedder):
+    """Embedder for nomic-ai/nomic-embed-text-v1.5.
+
+    Nomic requires a task-instruction prefix on every input text.
+    Use 'search_document:' for corpus docs and 'search_query:' for queries.
+    """
+
+    DOC_PREFIX = "search_document:"
+    QUERY_PREFIX = "search_query:"
+
+    def __init__(self, model_id: str, embedding_dim: int) -> None:
+        super().__init__(model_id, embedding_dim, trust_remote_code=True)
+
+    def embed(self, texts: list[str], batch_size: int = 32, prefix: str = DOC_PREFIX) -> np.ndarray:
+        if len(texts) == 0:
+            return np.empty((0, self._embedding_dim), dtype=np.float32)
+
+        prefixed = [f"{prefix} {t}" for t in texts]
+        embeddings = self._model.encode(
+            prefixed,
             batch_size=batch_size,
             convert_to_numpy=True,
             normalize_embeddings=True,

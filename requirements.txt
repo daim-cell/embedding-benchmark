@@ -1,5 +1,6 @@
 numpy
 tqdm
+einops
 sentence-transformers
 umap-learn
 beir
