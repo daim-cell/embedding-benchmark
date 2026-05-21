@@ -16,6 +16,8 @@ MODEL_REGISTRY: dict[str, dict] = {
         "trust_remote_code": True,
         "doc_prefix": "search_document:",
         "query_prefix": "search_query:",
+        # Cap at 512 to avoid ~5 GiB attention buffers with the 2048-token default.
+        "max_seq_length": 1024,
     },
     "openai_3_small": {
         "type": "openai",
@@ -58,6 +60,7 @@ def get_model(model_key: str) -> BaseEmbedder | BM25Retriever:
         return NomicEmbedder(
             model_id=config["model_id"],
             embedding_dim=config["embedding_dim"],
+            max_seq_length=config.get("max_seq_length"),
         )
 
     if config["type"] == "openai":

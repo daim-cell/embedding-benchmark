@@ -60,8 +60,16 @@ class BaseEmbedder(ABC):
 
 class SentenceTransformerEmbedder(BaseEmbedder):
 
-    def __init__(self, model_id: str, embedding_dim: int, trust_remote_code: bool = False) -> None:
+    def __init__(
+        self,
+        model_id: str,
+        embedding_dim: int,
+        trust_remote_code: bool = False,
+        max_seq_length: int | None = None,
+    ) -> None:
         self._model = SentenceTransformer(model_id, trust_remote_code=trust_remote_code)
+        if max_seq_length is not None:
+            self._model.max_seq_length = max_seq_length
         self._embedding_dim = embedding_dim
 
     @property
@@ -173,8 +181,8 @@ class NomicEmbedder(SentenceTransformerEmbedder):
     DOC_PREFIX = "search_document:"
     QUERY_PREFIX = "search_query:"
 
-    def __init__(self, model_id: str, embedding_dim: int) -> None:
-        super().__init__(model_id, embedding_dim, trust_remote_code=True)
+    def __init__(self, model_id: str, embedding_dim: int, max_seq_length: int | None = None) -> None:
+        super().__init__(model_id, embedding_dim, trust_remote_code=True, max_seq_length=max_seq_length)
 
     def embed(self, texts: list[str], batch_size: int = 32, prefix: str = DOC_PREFIX) -> np.ndarray:
         if len(texts) == 0:
