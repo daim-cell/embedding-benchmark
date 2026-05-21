@@ -7,3 +7,5 @@ openai
 cohere
 umap-learn
 beir
+matplotlib
+rank-bm25

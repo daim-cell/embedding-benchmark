@@ -68,20 +68,17 @@ pip install -r requirements.txt
 Suggested dependencies:
 
 ```text
-sentence-transformers
-transformers
-torch
-datasets
-faiss-cpu
-beir
-ranx
-umap-learn
-pandas
 numpy
-scikit-learn
 tqdm
+einops
+python-dotenv
+sentence-transformers
+openai
+cohere
+umap-learn
+beir
 matplotlib
-jupyter
+rank-bm25
 ```
 
 ## Dataset Setup
@@ -92,11 +89,6 @@ Use a small labeled retrieval dataset for local CPU development. The dataset sho
 - `queries`: query IDs mapped to query text
 - `qrels`: relevance labels mapping queries to relevant documents
 
-Download the dataset:
-
-```bash
-python scripts/download_data.py --dataset <dataset_name> --output-dir data/
-```
 
 Recommended workflow:
 
@@ -163,14 +155,14 @@ Use the same sampled corpus documents across all models so the visualizations ar
 
 Recommended UMAP output:
 
-- One plot per model.
+- One plot per dataset.
 - Same document sample for every model.
 - Optional labels based on dataset metadata when available.
 - Saved images under `results/`.
 
 ## Contrastive Adapter Training
 
-The training loop fine-tunes a lightweight adapter on paired domain data, such as question-answer pairs or query-document pairs.
+The training loop fine-tunes a lightweight adapter on paired domain data of the existing dataset.
 
 Training objective:
 
