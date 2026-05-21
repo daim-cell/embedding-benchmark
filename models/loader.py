@@ -1,12 +1,15 @@
 from abc import ABC, abstractmethod
 import os
+import pickle
 from pathlib import Path
 
 import cohere
 from dotenv import load_dotenv
 import numpy as np
 import openai
+from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
+from tqdm import tqdm
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
@@ -37,6 +40,10 @@ class BaseEmbedder(ABC):
         - Return a dense np.ndarray (not a framework tensor).
         - Normalize embeddings to unit length.
         """
+
+    def embed_queries(self, texts: list[str], batch_size: int = 32) -> np.ndarray:
+        """Encode query texts. Override in subclasses that need query-specific behavior."""
+        return self.embed(texts, batch_size)
 
     def _validate_output(self, texts: list[str], embeddings: np.ndarray) -> None:
         if embeddings.ndim != 2:
@@ -152,6 +159,9 @@ class CohereEmbedder(BaseEmbedder):
         self._validate_output(texts, embeddings)
         return embeddings
 
+    def embed_queries(self, texts: list[str], batch_size: int = 32) -> np.ndarray:
+        return self.embed(texts, batch_size, input_type=self.QUERY_INPUT_TYPE)
+
 
 class NomicEmbedder(SentenceTransformerEmbedder):
     """Embedder for nomic-ai/nomic-embed-text-v1.5.
@@ -181,3 +191,46 @@ class NomicEmbedder(SentenceTransformerEmbedder):
         embeddings = embeddings.astype(np.float32)
         self._validate_output(texts, embeddings)
         return embeddings
+
+    def embed_queries(self, texts: list[str], batch_size: int = 32) -> np.ndarray:
+        return self.embed(texts, batch_size, prefix=self.QUERY_PREFIX)
+
+
+class BM25Retriever:
+    """Sparse BM25 retrieval baseline. Not an embedder — fits on corpus and scores queries directly."""
+
+    embedding_dim = 0
+
+    def __init__(self) -> None:
+        self._bm25: BM25Okapi | None = None
+        self._corpus_ids: list[str] = []
+
+    def fit(self, corpus_ids: list[str], corpus_texts: list[str]) -> None:
+        tokenized = [t.lower().split() for t in corpus_texts]
+        self._bm25 = BM25Okapi(tokenized)
+        self._corpus_ids = corpus_ids
+
+    def retrieve(
+        self, query_texts: list[str], query_ids: list[str], top_k: int
+    ) -> dict[str, dict[str, float]]:
+        run: dict[str, dict[str, float]] = {}
+        for qid, qtext in zip(query_ids, tqdm(query_texts, desc="BM25 retrieval", leave=False)):
+            tokens = qtext.lower().split()
+            scores = self._bm25.get_scores(tokens)
+            top_indices = np.argsort(-scores)[:top_k]
+            run[qid] = {self._corpus_ids[i]: float(scores[i]) for i in top_indices}
+        return run
+
+    def save(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
+            pickle.dump({"bm25": self._bm25, "corpus_ids": self._corpus_ids}, f)
+
+    @classmethod
+    def load_from(cls, path: Path) -> "BM25Retriever":
+        with open(path, "rb") as f:
+            state = pickle.load(f)
+        obj = cls()
+        obj._bm25 = state["bm25"]
+        obj._corpus_ids = state["corpus_ids"]
+        return obj

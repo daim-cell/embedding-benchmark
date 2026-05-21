@@ -1,4 +1,4 @@
-from models.loader import BaseEmbedder, CohereEmbedder, NomicEmbedder, OpenAIEmbedder, SentenceTransformerEmbedder
+from models.loader import BaseEmbedder, BM25Retriever, CohereEmbedder, NomicEmbedder, OpenAIEmbedder, SentenceTransformerEmbedder
 
 MODEL_REGISTRY: dict[str, dict] = {
     "bge_m3": {
@@ -29,10 +29,14 @@ MODEL_REGISTRY: dict[str, dict] = {
         "doc_input_type": "search_document",
         "query_input_type": "search_query",
     },
+    "bm25": {
+        "type": "bm25",
+        "embedding_dim": 0,
+    },
 }
 
 
-def get_embedder(model_key: str) -> BaseEmbedder:
+def get_model(model_key: str) -> BaseEmbedder | BM25Retriever:
     if model_key not in MODEL_REGISTRY:
         raise KeyError(
             f"Unknown model key '{model_key}'. "
@@ -40,6 +44,9 @@ def get_embedder(model_key: str) -> BaseEmbedder:
         )
 
     config = MODEL_REGISTRY[model_key]
+
+    if config["type"] == "bm25":
+        return BM25Retriever()
 
     if config["type"] == "bge":
         return SentenceTransformerEmbedder(
