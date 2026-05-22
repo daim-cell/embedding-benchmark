@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import os
 import pickle
 from pathlib import Path
+import time
 
 import cohere
 from dotenv import load_dotenv
@@ -80,14 +81,21 @@ class SentenceTransformerEmbedder(BaseEmbedder):
         if len(texts) == 0:
             return np.empty((0, self._embedding_dim), dtype=np.float32)
 
-        embeddings = self._model.encode(
-            texts,
-            batch_size=batch_size,
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-        )
-        embeddings = embeddings.astype(np.float32)
+        all_embeddings: list[np.ndarray] = []
+        with tqdm(total=len(texts), desc="Embedding", unit="text") as pbar:
+            for i in range(0, len(texts), batch_size):
+                batch = texts[i : i + batch_size]
+                vecs = self._model.encode(
+                    batch,
+                    batch_size=batch_size,
+                    convert_to_numpy=True,
+                    normalize_embeddings=True,
+                    show_progress_bar=False,
+                )
+                all_embeddings.append(vecs.astype(np.float32))
+                pbar.update(len(batch))
+
+        embeddings = np.vstack(all_embeddings)
         self._validate_output(texts, embeddings)
         return embeddings
 
@@ -108,16 +116,18 @@ class OpenAIEmbedder(BaseEmbedder):
             return np.empty((0, self._embedding_dim), dtype=np.float32)
 
         all_embeddings: list[np.ndarray] = []
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i : i + batch_size]
-            response = self._client.embeddings.create(input=batch, model=self._model_id)
-            batch_vecs = np.array(
-                [item.embedding for item in response.data], dtype=np.float32
-            )
-            # OpenAI does not return unit-normalized vectors by default.
-            norms = np.linalg.norm(batch_vecs, axis=1, keepdims=True)
-            batch_vecs = batch_vecs / np.where(norms == 0, 1.0, norms)
-            all_embeddings.append(batch_vecs)
+        with tqdm(total=len(texts), desc="Embedding", unit="text") as pbar:
+            for i in range(0, len(texts), batch_size):
+                batch = texts[i : i + batch_size]
+                response = self._client.embeddings.create(input=batch, model=self._model_id)
+                batch_vecs = np.array(
+                    [item.embedding for item in response.data], dtype=np.float32
+                )
+                # OpenAI does not return unit-normalized vectors by default.
+                norms = np.linalg.norm(batch_vecs, axis=1, keepdims=True)
+                batch_vecs = batch_vecs / np.where(norms == 0, 1.0, norms)
+                all_embeddings.append(batch_vecs)
+                pbar.update(len(batch))
 
         embeddings = np.vstack(all_embeddings)
         self._validate_output(texts, embeddings)
@@ -128,12 +138,33 @@ class CohereEmbedder(BaseEmbedder):
 
     DOC_INPUT_TYPE = "search_document"
     QUERY_INPUT_TYPE = "search_query"
-    _MAX_BATCH = 96  # Cohere hard limit per request
+    _MAX_BATCH = 96   # Cohere hard limit per request
+    _TPM_LIMIT = 10_000  # free-tier tokens per minute
 
     def __init__(self, model_id: str, embedding_dim: int) -> None:
         self._client = cohere.Client(api_key=_get_api_key("COHERE_API_KEY"))
         self._model_id = model_id
         self._embedding_dim = embedding_dim
+        self._window_start = time.monotonic()
+        self._tokens_this_window = 0
+
+    @staticmethod
+    def _estimate_tokens(texts: list[str]) -> int:
+        # ~4 characters per token is a reasonable approximation for English prose.
+        return max(1, sum(len(t) for t in texts) // 2)
+
+    def _throttle(self, estimated_tokens: int) -> None:
+        elapsed = time.monotonic() - self._window_start
+        if elapsed >= 60.0:
+            self._window_start = time.monotonic()
+            self._tokens_this_window = 0
+        elif self._tokens_this_window + estimated_tokens > self._TPM_LIMIT:
+            sleep_for = 60.0 - elapsed
+            tqdm.write(f"  Cohere TPM limit reached — waiting {sleep_for:.1f}s ...")
+            time.sleep(sleep_for)
+            self._window_start = time.monotonic()
+            self._tokens_this_window = 0
+        self._tokens_this_window += estimated_tokens
 
     @property
     def embedding_dim(self) -> int:
@@ -150,18 +181,21 @@ class CohereEmbedder(BaseEmbedder):
 
         effective_batch = min(batch_size, self._MAX_BATCH)
         all_embeddings: list[np.ndarray] = []
-        for i in range(0, len(texts), effective_batch):
-            batch = texts[i : i + effective_batch]
-            response = self._client.embed(
-                texts=batch,
-                model=self._model_id,
-                input_type=input_type,
-            )
-            batch_vecs = np.array(response.embeddings, dtype=np.float32)
-            # Cohere v3 embeddings are unit-normalized; normalize defensively.
-            norms = np.linalg.norm(batch_vecs, axis=1, keepdims=True)
-            batch_vecs = batch_vecs / np.where(norms == 0, 1.0, norms)
-            all_embeddings.append(batch_vecs)
+        with tqdm(total=len(texts), desc="Embedding", unit="text") as pbar:
+            for i in range(0, len(texts), effective_batch):
+                batch = texts[i : i + effective_batch]
+                self._throttle(self._estimate_tokens(batch))
+                response = self._client.embed(
+                    texts=batch,
+                    model=self._model_id,
+                    input_type=input_type,
+                )
+                batch_vecs = np.array(response.embeddings, dtype=np.float32)
+                # Cohere v3 embeddings are unit-normalized; normalize defensively.
+                norms = np.linalg.norm(batch_vecs, axis=1, keepdims=True)
+                batch_vecs = batch_vecs / np.where(norms == 0, 1.0, norms)
+                all_embeddings.append(batch_vecs)
+                pbar.update(len(batch))
 
         embeddings = np.vstack(all_embeddings)
         self._validate_output(texts, embeddings)
@@ -189,14 +223,21 @@ class NomicEmbedder(SentenceTransformerEmbedder):
             return np.empty((0, self._embedding_dim), dtype=np.float32)
 
         prefixed = [f"{prefix} {t}" for t in texts]
-        embeddings = self._model.encode(
-            prefixed,
-            batch_size=batch_size,
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-        )
-        embeddings = embeddings.astype(np.float32)
+        all_embeddings: list[np.ndarray] = []
+        with tqdm(total=len(texts), desc="Embedding", unit="text") as pbar:
+            for i in range(0, len(prefixed), batch_size):
+                batch = prefixed[i : i + batch_size]
+                vecs = self._model.encode(
+                    batch,
+                    batch_size=batch_size,
+                    convert_to_numpy=True,
+                    normalize_embeddings=True,
+                    show_progress_bar=False,
+                )
+                all_embeddings.append(vecs.astype(np.float32))
+                pbar.update(len(batch))
+
+        embeddings = np.vstack(all_embeddings)
         self._validate_output(texts, embeddings)
         return embeddings
 
