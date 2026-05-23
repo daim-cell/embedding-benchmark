@@ -138,28 +138,33 @@ class CohereEmbedder(BaseEmbedder):
 
     DOC_INPUT_TYPE = "search_document"
     QUERY_INPUT_TYPE = "search_query"
-    _MAX_BATCH = 96          # Cohere hard limit per request
-    _MAX_BATCHES_PER_MIN = 8 # hard request-rate ceiling
+    _MAX_BATCH = 96   # Cohere hard limit per request
+    _TPM_LIMIT = 100000  # free-tier tokens per minute
 
     def __init__(self, model_id: str, embedding_dim: int) -> None:
         self._client = cohere.Client(api_key=_get_api_key("COHERE_API_KEY"))
         self._model_id = model_id
         self._embedding_dim = embedding_dim
         self._window_start = time.monotonic()
-        self._batches_this_window = 0
+        self._tokens_this_window = 0
 
-    def _throttle(self) -> None:
+    @staticmethod
+    def _estimate_tokens(texts: list[str]) -> int:
+        # ~4 characters per token is a reasonable approximation for English prose.
+        return max(1, sum(len(t) for t in texts) // 4)
+
+    def _throttle(self, estimated_tokens: int) -> None:
         elapsed = time.monotonic() - self._window_start
         if elapsed >= 60.0:
             self._window_start = time.monotonic()
-            self._batches_this_window = 0
-        elif self._batches_this_window >= self._MAX_BATCHES_PER_MIN:
+            self._tokens_this_window = 0
+        elif self._tokens_this_window + estimated_tokens > self._TPM_LIMIT:
             sleep_for = 60.0 - elapsed
-            tqdm.write(f"  Cohere rate limit reached — waiting {sleep_for:.1f}s ...")
+            tqdm.write(f"  Cohere TPM limit reached — waiting {sleep_for:.1f}s ...")
             time.sleep(sleep_for)
             self._window_start = time.monotonic()
-            self._batches_this_window = 0
-        self._batches_this_window += 1
+            self._tokens_this_window = 0
+        self._tokens_this_window += estimated_tokens
 
     @property
     def embedding_dim(self) -> int:
@@ -179,7 +184,7 @@ class CohereEmbedder(BaseEmbedder):
         with tqdm(total=len(texts), desc="Embedding", unit="text") as pbar:
             for i in range(0, len(texts), effective_batch):
                 batch = texts[i : i + effective_batch]
-                self._throttle()
+                self._throttle(self._estimate_tokens(batch))
                 response = self._client.embed(
                     texts=batch,
                     model=self._model_id,
