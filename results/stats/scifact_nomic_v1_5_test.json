@@ -1,0 +1,14 @@
+{
+  "dataset": "scifact",
+  "split": "test",
+  "model": "nomic_v1_5",
+  "embedding_dim": 768,
+  "mrr_at_10": 0.66665,
+  "ndcg_at_10": 0.70316,
+  "avg_latency_per_embedding_ms": 4216.983494543712,
+  "total_corpus_encode_time_sec": 23118.4366754581,
+  "total_query_encode_time_sec": 3.283825125079602,
+  "num_corpus_documents": 5183,
+  "num_queries": 300,
+  "top_k": 10
+}

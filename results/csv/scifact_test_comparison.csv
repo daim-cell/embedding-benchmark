@@ -1,0 +1,5 @@
+cache_file,stats_file,dataset,split,model,embedding_dim,mrr_at_10,ndcg_at_10,avg_latency_per_embedding_ms,total_corpus_encode_time_sec,total_query_encode_time_sec,num_corpus_documents,num_queries,top_k
+results/corpus_cache/scifact/bge_m3_corpus.npz,results/stats/scifact_bge_m3_test.json,scifact,test,bge_m3,768,0.70037,0.73763,91.32424043245192,497.51265366608277,3.2181566250510514,5183,300,10
+results/corpus_cache/scifact/cohere_en_v3_corpus.npz,results/stats/scifact_cohere_en_v3_test.json,scifact,test,cohere_en_v3,1024,0.68342,0.71677,220.5031560277213,1202.9865308329463,6.032273667049594,5183,300,10
+results/corpus_cache/scifact/nomic_v1_5_corpus.npz,results/stats/scifact_nomic_v1_5_test.json,scifact,test,nomic_v1_5,768,0.66665,0.70316,4216.983494543712,23118.4366754581,3.283825125079602,5183,300,10
+results/corpus_cache/scifact/openai_3_small_corpus.npz,results/stats/scifact_openai_3_small_test.json,scifact,test,openai_3_small,1536,0.69223,0.72562,27.7678053302936,146.45401866699103,5.796857959008776,5183,300,10

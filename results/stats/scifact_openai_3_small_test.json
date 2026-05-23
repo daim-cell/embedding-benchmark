@@ -1,0 +1,14 @@
+{
+  "dataset": "scifact",
+  "split": "test",
+  "model": "openai_3_small",
+  "embedding_dim": 1536,
+  "mrr_at_10": 0.69223,
+  "ndcg_at_10": 0.72562,
+  "avg_latency_per_embedding_ms": 27.7678053302936,
+  "total_corpus_encode_time_sec": 146.45401866699103,
+  "total_query_encode_time_sec": 5.796857959008776,
+  "num_corpus_documents": 5183,
+  "num_queries": 300,
+  "top_k": 10
+}

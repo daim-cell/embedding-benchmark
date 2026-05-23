@@ -1,0 +1,14 @@
+{
+  "dataset": "scifact",
+  "split": "test",
+  "model": "bm25",
+  "embedding_dim": 0,
+  "mrr_at_10": 0.52422,
+  "ndcg_at_10": 0.5597,
+  "avg_latency_per_embedding_ms": 11.198885000000399,
+  "total_corpus_encode_time_sec": 0.4964163749245927,
+  "total_query_encode_time_sec": 3.359665500000119,
+  "num_corpus_documents": 5183,
+  "num_queries": 300,
+  "top_k": 10
+}

@@ -1,0 +1,1 @@
+cache_file,stats_file,dataset,split,model,embedding_dim,mrr_at_10,ndcg_at_10,avg_latency_per_embedding_ms,total_corpus_encode_time_sec,total_query_encode_time_sec,num_corpus_documents,num_queries,top_k
