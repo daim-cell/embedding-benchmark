@@ -1,0 +1,3 @@
+cache_file,stats_file,dataset,split,model,embedding_dim,mrr_at_10,ndcg_at_10,avg_latency_per_embedding_ms,total_corpus_encode_time_sec,total_query_encode_time_sec,num_corpus_documents,num_queries,top_k
+results/corpus_cache/fiqa/bge_m3_corpus.npz,results/stats/fiqa_bge_m3_test.json,fiqa,test,bge_m3,768,0.47397,0.39095,147.49883274283616,8593.063628332922,4.053336916025728,57638,648,10
+results/corpus_cache/fiqa/openai_3_small_corpus.npz,results/stats/fiqa_openai_3_small_test.json,fiqa,test,openai_3_small,1536,0.52122,0.44845,33.729694974624614,1934.6885212080088,31.28048008296173,57638,648,10

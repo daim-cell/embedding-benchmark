@@ -1,0 +1,14 @@
+{
+  "dataset": "fiqa",
+  "split": "test",
+  "model": "bm25",
+  "embedding_dim": 0,
+  "mrr_at_10": 0.19854,
+  "ndcg_at_10": 0.15906,
+  "avg_latency_per_embedding_ms": 178.38477764985046,
+  "total_corpus_encode_time_sec": 2.1763236249098554,
+  "total_query_encode_time_sec": 115.5933359171031,
+  "num_corpus_documents": 57638,
+  "num_queries": 648,
+  "top_k": 10
+}

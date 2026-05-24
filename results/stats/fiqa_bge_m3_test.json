@@ -1,0 +1,14 @@
+{
+  "dataset": "fiqa",
+  "split": "test",
+  "model": "bge_m3",
+  "embedding_dim": 768,
+  "mrr_at_10": 0.47397,
+  "ndcg_at_10": 0.39095,
+  "avg_latency_per_embedding_ms": 147.49883274283616,
+  "total_corpus_encode_time_sec": 8593.063628332922,
+  "total_query_encode_time_sec": 4.053336916025728,
+  "num_corpus_documents": 57638,
+  "num_queries": 648,
+  "top_k": 10
+}

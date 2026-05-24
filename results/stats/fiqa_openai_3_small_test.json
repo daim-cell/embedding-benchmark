@@ -1,0 +1,14 @@
+{
+  "dataset": "fiqa",
+  "split": "test",
+  "model": "openai_3_small",
+  "embedding_dim": 1536,
+  "mrr_at_10": 0.52122,
+  "ndcg_at_10": 0.44845,
+  "avg_latency_per_embedding_ms": 33.729694974624614,
+  "total_corpus_encode_time_sec": 1934.6885212080088,
+  "total_query_encode_time_sec": 31.28048008296173,
+  "num_corpus_documents": 57638,
+  "num_queries": 648,
+  "top_k": 10
+}

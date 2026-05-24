@@ -119,13 +119,21 @@ class OpenAIEmbedder(BaseEmbedder):
         with tqdm(total=len(texts), desc="Embedding", unit="text") as pbar:
             for i in range(0, len(texts), batch_size):
                 batch = texts[i : i + batch_size]
-                response = self._client.embeddings.create(input=batch, model=self._model_id)
+                # OpenAI rejects empty strings; replace them with a single space
+                # and zero out the resulting vectors afterward.
+                empty_mask = [t.strip() == "" for t in batch]
+                safe_batch = [" " if m else t for m, t in zip(empty_mask, batch)]
+                response = self._client.embeddings.create(input=safe_batch, model=self._model_id)
                 batch_vecs = np.array(
                     [item.embedding for item in response.data], dtype=np.float32
                 )
                 # OpenAI does not return unit-normalized vectors by default.
                 norms = np.linalg.norm(batch_vecs, axis=1, keepdims=True)
                 batch_vecs = batch_vecs / np.where(norms == 0, 1.0, norms)
+                # Zero out vectors that were produced for originally-empty strings.
+                for j, is_empty in enumerate(empty_mask):
+                    if is_empty:
+                        batch_vecs[j] = 0.0
                 all_embeddings.append(batch_vecs)
                 pbar.update(len(batch))
 
