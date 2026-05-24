@@ -37,7 +37,7 @@ def _encode(st_model, texts: list[str], batch_size: int = 32) -> np.ndarray:
 def train(dataset_dir: Path, ft_model_path: Path) -> None:
     from beir.datasets.data_loader import GenericDataLoader
     from sentence_transformers import InputExample, SentenceTransformer
-    from sentence_transformers.losses import MultipleNegativesRankingLoss
+    from sentence_transformers.sentence_transformer.losses import MultipleNegativesRankingLoss
     from torch.utils.data import DataLoader
 
     print("Loading scifact train split via BeIR GenericDataLoader ...")
