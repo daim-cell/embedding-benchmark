@@ -1,213 +1,256 @@
 # Embedding Model Benchmarking Lab
 
-A reproducible lab for comparing multiple embedding models on retrieval quality, latency, cost, and embedding-space behavior. The project also includes a lightweight contrastive adapter training loop to measure whether domain-specific fine-tuning can improve retrieval performance.
+A reproducible retrieval benchmark for comparing dense embedding models and a BM25 baseline on BEIR-style datasets. The project evaluates retrieval quality and encoding latency, visualizes corpus embedding spaces with UMAP, and compares two contrastive fine-tuning losses on SciFact.
 
-## Overview
+## What This Project Does
 
-This project benchmarks several embedding models using the same retrieval dataset, evaluation pipeline, and metrics. It is designed to answer practical questions such as:
+The project answers three practical questions:
 
-- Which embedding model performs best on a labeled retrieval task?
-- How do latency, embedding dimensionality, and cost compare across models?
-- Do different embedding models organize the same corpus into visibly different semantic clusters?
-- Can a lightweight contrastive adapter improve retrieval quality on a domain-specific dataset?
+1. How do different retrieval models compare on the same labeled datasets?
+2. How do dense models organize the same corpus in their embedding spaces?
+3. Does domain fine-tuning improve retrieval, and does the training loss matter?
 
-The lab includes:
+Implemented workflows:
 
-- A unified embedding interface for swapping models by name.
-- A benchmark harness for corpus/query encoding, vector search, and metric computation.
-- Retrieval metrics including cosine similarity, MRR@10, and NDCG@10.
-- A 2D UMAP visualization workflow for comparing embedding spaces.
-- A contrastive fine-tuning loop using paired text data.
-- Before/after benchmark comparisons for fine-tuned adapters.
-- A final notebook report covering retrieval accuracy, latency, cost, and dimensionality tradeoffs.
+- Benchmark dense local and API embedding models alongside BM25.
+- Evaluate retrieval with cosine similarity, `MRR@10`, and `NDCG@10`.
 
-## Project Structure
+- Generate side-by-side 2D UMAP plots for dense models on a shared document set.
+- Build comparison CSV files only for dense models represented in a UMAP comparison.
+- Fine-tune `BAAI/bge-base-en-v1.5` on SciFact with `MultipleNegativesRankingLoss` or `GISTEmbedLoss`.
+
+## Repository Layout
 
 ```text
-embedding-benchmarking-lab/
+embedding-benchmark/
 ├── benchmarks/
-│   ├── run_benchmark.py        # Main benchmark entry point
-│   ├── compare.py              # Aggregate benchmark results
-│   └── visualize_umap.py       # Generate 2D embedding visualizations
+│   ├── run_benchmark.py       # Dense and BM25 retrieval benchmark
+│   ├── compare.py             # CSV summary for UMAP-included dense models
+│   └── visualize_umap.py      # Side-by-side corpus UMAP visualizations
 ├── data/
-│   └── .gitkeep                # Local datasets are stored here
+│   ├── fiqa/                  # BEIR FIQA corpus, queries, and qrels
+│   └── scifact/               # BEIR SciFact corpus, queries, and qrels
 ├── models/
-│   ├── loader.py               # Unified model loading and embedding interface
-│   └── registry.py             # Model registry configuration
+│   ├── loader.py              # Dense embedders and BM25 retriever
+│   ├── registry.py            # Benchmark model configuration
+│   └── bge-*-scifact-ft/      # Saved fine-tuned models when generated
 ├── training/
-│   ├── train_adapter.py        # Contrastive adapter training loop
-│   └── evaluate_adapter.py     # Before/after adapter evaluation
-├── notebooks/
-│   └── final_report.ipynb      # Final benchmark report
+│   └── train_adapter.py       # Fine-tuning and evaluation for SciFact
 ├── results/
-│   └── .gitkeep                # Benchmark outputs are stored here
+│   ├── corpus_cache/<dataset>/ # Dense `.npz` vectors and BM25 `.pkl` indexes
+│   ├── stats/                  # Per-run JSON metrics
+│   ├── csv/                    # Comparison CSV exports
+│   └── images/                 # UMAP images
+├── notebooks/
+│   └── final_report.ipynb
 ├── scripts/
-│   └── download_data.py        # Dataset acquisition script
-├── requirements.txt
-├── README.md
-└── CLAUDE.md
+│   └── download_data.py
+└── requirements.txt
 ```
 
-## Environment Setup
+## Models
 
-Use Python 3.10 or newer.
+The benchmark keys currently configured in `models/registry.py` are:
+
+| Model key | Implementation | Dimensionality | Notes |
+| --- | --- | ---: | --- |
+| `bge_m3` | `BAAI/bge-base-en-v1.5` via SentenceTransformers | 768 | Local dense encoder |
+| `nomic_v1_5` | `nomic-ai/nomic-embed-text-v1.5` | 768 | Adds document/query task prefixes |
+| `openai_3_small` | `text-embedding-3-small` | 1536 | Requires `OPENAI_API_KEY` |
+| `cohere_en_v3` | `embed-english-v3.0` | 1024 | Requires `COHERE_API_KEY` |
+| `bm25` | `rank-bm25` lexical retriever | N/A | Sparse non-embedding baseline |
+
+Fine-tuned SciFact outputs are evaluated under keys such as:
+
+- `bge_mnrl_scifact_ft`
+- `bge_gist_scifact_ft`
+
+## Setup
+
+Use Python 3.10 or newer. The project is designed to run locally on CPU.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-```
-
-Install the CPU-only deep learning runtime first to avoid pulling unnecessary GPU binaries. Then install the rest of the project dependencies.
-
-```bash
 pip install --upgrade pip
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 ```
 
-Suggested dependencies:
-
-```text
-numpy
-tqdm
-einops
-python-dotenv
-sentence-transformers
-openai
-cohere
-umap-learn
-beir
-matplotlib
-rank-bm25
-```
-
-## Dataset Setup
-
-Use a small labeled retrieval dataset for local CPU development. The dataset should provide:
-
-- `corpus`: document IDs mapped to document text
-- `queries`: query IDs mapped to query text
-- `qrels`: relevance labels mapping queries to relevant documents
-
-
-Recommended workflow:
-
-1. Start with a small dataset to validate the pipeline quickly.
-2. Confirm that corpus, queries, and qrels are present.
-3. Run a single model benchmark end-to-end.
-4. Scale to additional models only after the first benchmark works.
-
-
-## Running Benchmarks
-
-Run a benchmark for one model:
+For API-backed embedding runs, create a `.env` file or export environment variables:
 
 ```bash
-python benchmarks/run_benchmark.py \
-  --model model_a \
-  --dataset data/<dataset_name> \
-  --batch-size 32 \
-  --top-k 10 \
-  --output results/model_a_results.json
+OPENAI_API_KEY=<your-key>
+COHERE_API_KEY=<your-key>
 ```
 
-The benchmark should:
+## Datasets
 
-1. Load corpus, queries, and qrels.
-2. Encode the corpus in batches.
-3. Encode all queries.
-4. L2-normalize embeddings.
-5. Build a flat vector index.
-6. Retrieve top-k documents per query using cosine similarity.
-7. Compute MRR@10 and NDCG@10.
-8. Record latency and embedding dimensionality.
-9. Save results as JSON.
+Both included datasets use a BEIR-style layout:
 
-Example result format:
+```text
+data/<dataset>/
+  corpus.jsonl
+  queries.jsonl
+  qrels/
+    train.tsv
+    test.tsv
+```
+
+FIQA additionally provides `qrels/dev.tsv`.
+
+| Dataset | Corpus documents | Queries | Evaluation split |
+| --- | ---: | ---: | --- |
+| SciFact | 5,183 | 1,109 | `qrels/test.tsv` |
+| FIQA | 57,638 | 6,648 | `qrels/test.tsv` |
+
+For evaluation, the harness embeds all corpus documents and only the queries appearing in the requested qrels split. The `train` split is used for fine-tuning, not for final benchmark scoring.
+
+## Benchmark Pipeline
+
+`benchmarks/run_benchmark.py` performs the full retrieval evaluation:
+
+Run one dense model:
+
+```bash
+.venv/bin/python benchmarks/run_benchmark.py \
+  --model bge_m3 \
+  --dataset data/scifact \
+  --split test \
+  --batch-size 32 \
+  --top-k 10
+```
+
+Run the BM25 baseline:
+
+```bash
+.venv/bin/python benchmarks/run_benchmark.py \
+  --model bm25 \
+  --dataset data/scifact \
+  --split test \
+  --top-k 10
+```
+
+Use limited runs while validating a new model:
+
+```bash
+.venv/bin/python benchmarks/run_benchmark.py \
+  --model bge_m3 \
+  --dataset data/fiqa \
+  --split test \
+  --limit-corpus 1000 \
+  --limit-queries 50 \
+  --batch-size 16
+```
+
+Per-run JSON output includes:
 
 ```json
 {
-  "model": "model_a",
+  "dataset": "scifact",
+  "split": "test",
+  "model": "bge_m3",
   "embedding_dim": 768,
   "mrr_at_10": 0.0,
   "ndcg_at_10": 0.0,
   "avg_latency_per_embedding_ms": 0.0,
   "total_corpus_encode_time_sec": 0.0,
+  "total_query_encode_time_sec": 0.0,
   "num_corpus_documents": 0,
-  "num_queries": 0
+  "num_queries": 0,
+  "top_k": 10
 }
 ```
 
+Latency values depend on hardware, network/API conditions, batch size, and whether cached corpus vectors are reused.
 
 ## UMAP Visualization
 
-Generate 2D projections of corpus embeddings to compare how models organize semantic space.
+`benchmarks/visualize_umap.py` discovers every dense `.npz` cache for one dataset, intersects their document IDs, and projects the same document sample through UMAP for a valid side-by-side comparison. BM25 is not included because it does not produce dense embedding vectors.
 
 ```bash
-python benchmarks/visualize_umap.py \
-  --model model_a \
-  --dataset data/<dataset_name> \
+.venv/bin/python benchmarks/visualize_umap.py \
+  --dataset scifact \
   --sample-size 1000 \
-  --output results/model_a_umap.png
+  --output results/images/scifact_umap.png
 ```
 
-Use the same sampled corpus documents across all models so the visualizations are comparable.
+The default output path is `results/images/<dataset>_umap.png`.
 
-Recommended UMAP output:
+## Comparison CSV
 
-- One plot per dataset.
-- Same document sample for every model.
-- Optional labels based on dataset metadata when available.
-- Saved images under `results/`.
+`benchmarks/compare.py` relates corpus cache filenames to metric JSON files. It includes only models that have `.npz` corpus embeddings available for UMAP, ensuring the table and the plotted dense models represent the same comparison set.
 
-## Contrastive Adapter Training
+```bash
+.venv/bin/python benchmarks/compare.py \
+  --dataset scifact \
+  --split test \
+  --output results/csv/scifact_test_comparison.csv
+```
 
-The training loop fine-tunes a lightweight adapter on paired domain data of the existing dataset.
+BM25 metrics remain available in `results/stats/`, but BM25 is intentionally omitted from UMAP-filtered CSV files.
 
-Training objective:
+## Fine-Tuning Experiment
 
-- Positive pairs should be close in embedding space.
-- In-batch negatives should be pushed farther apart.
-- The adapter should improve retrieval on the target domain without requiring full model retraining.
+`training/train_adapter.py` builds positive `(query, relevant_document)` pairs from the SciFact training qrels and fine-tunes `BAAI/bge-base-en-v1.5`. It supports two losses with the same training pairs:
 
+| Loss | Training behavior |
+| --- | --- |
+| `mnrl` | `MultipleNegativesRankingLoss` uses other documents in the batch as negatives. |
+| `gist` | `GISTEmbedLoss` uses a fixed guide encoder to improve in-batch negative selection. |
 
-## Development Milestones
+Train and evaluate the MNRL variant:
 
-### 1. Environment and Dataset
+```bash
+.venv/bin/python training/train_adapter.py \
+  --loss mnrl \
+  --model bge_mnrl_scifact_ft
+```
 
-- Create local Python environment.
-- Install CPU-only dependencies.
-- Download a small retrieval dataset.
-- Validate corpus, queries, and qrels.
+Train and evaluate the GIST variant:
 
-### 2. Model Loading
+```bash
+.venv/bin/python training/train_adapter.py \
+  --loss gist \
+  --model bge_gist_scifact_ft
+```
 
-- Implement the shared embedding interface.
-- Add model registry entries.
-- Test each model on a small text batch.
-- Confirm embedding shapes and dtype.
+Both commands evaluate on SciFact `test` qrels after training and save a stats JSON plus a dense corpus cache, allowing the fine-tuned models to join the UMAP and CSV comparisons.
 
-### 3. Benchmark Harness
+## Recorded Results
 
-- Encode corpus and queries.
-- Build vector index.
-- Retrieve top-k results.
-- Compute MRR@10 and NDCG@10.
-- Save per-model JSON results.
+The current result artifacts report the following test performance.
 
-### 4. Comparison and Visualization
+### SciFact Test
 
-- Aggregate all benchmark outputs.
-- Save comparison CSV.
-- Generate UMAP plots.
-- Add results to the final notebook.
+| Model | MRR@10 | NDCG@10 | Dimension |
+| --- | ---: | ---: | ---: |
+| `bge_mnrl_scifact_ft` | 0.73162 | 0.76894 | 768 |
+| `bge_gist_scifact_ft` | 0.72409 | 0.76412 | 768 |
+| `bge_m3` | 0.70037 | 0.73763 | 768 |
+| `openai_3_small` | 0.69223 | 0.72562 | 1536 |
+| `cohere_en_v3` | 0.68342 | 0.71677 | 1024 |
+| `nomic_v1_5` | 0.66665 | 0.70316 | 768 |
+| `bm25` | 0.52422 | 0.55970 | N/A |
 
-### 5. Adapter Training
+### FIQA Test
 
-- Prepare paired domain data.
-- Train contrastive adapter.
-- Re-run benchmark after fine-tuning.
-- Compare before/after metrics.
+| Model | MRR@10 | NDCG@10 | Dimension |
+| --- | ---: | ---: | ---: |
+| `openai_3_small` | 0.52122 | 0.44845 | 1536 |
+| `bge_m3` | 0.47397 | 0.39095 | 768 |
+| `bm25` | 0.19854 | 0.15906 | N/A |
 
+In the recorded SciFact experiment, both fine-tuning losses improve over the unfine-tuned dense baseline, with MNRL slightly ahead of GIST. In FIQA, `openai_3_small` is the strongest of the recorded evaluated models.
 
+## Reproducing the Workflow
 
+For a model and dataset combination:
+
+```bash
+.venv/bin/python benchmarks/run_benchmark.py --model <model_key> --dataset data/<dataset> --split test
+.venv/bin/python benchmarks/visualize_umap.py --dataset <dataset> --sample-size 1000
+.venv/bin/python benchmarks/compare.py --dataset <dataset> --split test
+```
+
+For the loss comparison experiment, run the two fine-tuning commands before regenerating the SciFact UMAP and comparison CSV.
