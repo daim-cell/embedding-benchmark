@@ -1,0 +1,14 @@
+{
+  "dataset": "scifact",
+  "split": "test",
+  "model": "bge_gist_scifact_ft",
+  "embedding_dim": 768,
+  "mrr_at_10": 0.72409,
+  "ndcg_at_10": 0.76412,
+  "avg_latency_per_embedding_ms": 117.31830679663507,
+  "total_corpus_encode_time_sec": 639.6686692499788,
+  "total_query_encode_time_sec": 3.5876069159712642,
+  "num_corpus_documents": 5183,
+  "num_queries": 300,
+  "top_k": 10
+}

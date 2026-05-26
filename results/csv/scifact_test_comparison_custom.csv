@@ -1,0 +1,4 @@
+cache_file,stats_file,dataset,split,model,embedding_dim,mrr_at_10,ndcg_at_10,avg_latency_per_embedding_ms,total_corpus_encode_time_sec,total_query_encode_time_sec,num_corpus_documents,num_queries,top_k
+results/corpus_cache/scifact/bge_gist_scifact_ft_corpus.npz,results/stats/scifact_bge_gist_scifact_ft_test.json,scifact,test,bge_gist_scifact_ft,768,0.72409,0.76412,117.31830679663507,639.6686692499788,3.5876069159712642,5183,300,10
+results/corpus_cache/scifact/bge_m3_corpus.npz,results/stats/scifact_bge_m3_test.json,scifact,test,bge_m3,768,0.70037,0.73763,91.32424043245192,497.51265366608277,3.2181566250510514,5183,300,10
+results/corpus_cache/scifact/bge_mnrl_scifact_ft_corpus.npz,results/stats/scifact_bge_mnrl_scifact_ft_test.json,scifact,test,bge_mnrl_scifact_ft,768,0.73162,0.76894,116.66455879535192,636.5160237919772,3.155752082937397,5183,300,10
