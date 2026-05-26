@@ -243,6 +243,9 @@ The current result artifacts report the following test performance.
 
 In the recorded SciFact experiment, both fine-tuning losses improve over the unfine-tuned dense baseline, with MNRL slightly ahead of GIST. In FIQA, `openai_3_small` is the strongest of the recorded evaluated models.
 
+
+![scifact_umap_custom](results/images/scifact_umap_custom.png)
+
 ## Reproducing the Workflow
 
 For a model and dataset combination:
