@@ -34,10 +34,19 @@ def _encode(st_model, texts: list[str], batch_size: int = 32) -> np.ndarray:
     ).astype(np.float32)
 
 
-def train(dataset_dir: Path, ft_model_path: Path) -> None:
+def train(
+    dataset_dir: Path,
+    ft_model_path: Path,
+    loss_name: str,
+    base_model_id: str,
+    guide_model_id: str,
+) -> None:
     from beir.datasets.data_loader import GenericDataLoader
     from sentence_transformers import InputExample, SentenceTransformer
-    from sentence_transformers.sentence_transformer.losses import MultipleNegativesRankingLoss
+    from sentence_transformers.sentence_transformer.losses import (
+        GISTEmbedLoss,
+        MultipleNegativesRankingLoss,
+    )
     from torch.utils.data import DataLoader
 
     print("Loading scifact train split via BeIR GenericDataLoader ...")
@@ -59,11 +68,18 @@ def train(dataset_dir: Path, ft_model_path: Path) -> None:
     print(f"Extracted {len(pairs)} training pairs.")
     dataloader = DataLoader(pairs, batch_size=4, shuffle=True)
 
-    print("Loading base model: BAAI/bge-base-en-v1.5 ...")
-    model = SentenceTransformer("BAAI/bge-base-en-v1.5", device='cpu')
+    print(f"Loading base model: {base_model_id} ...")
+    model = SentenceTransformer(base_model_id, device="cpu")
     print("Model loaded.")
 
-    loss = MultipleNegativesRankingLoss(model)
+    if loss_name == "gist":
+        print(f"Loading GIST guide model: {guide_model_id} ...")
+        guide = SentenceTransformer(guide_model_id, device="cpu")
+        loss = GISTEmbedLoss(model=model, guide=guide)
+        print("Using GISTEmbedLoss.")
+    else:
+        loss = MultipleNegativesRankingLoss(model)
+        print("Using MultipleNegativesRankingLoss.")
 
     warmup_steps = max(1, int(0.1 * len(dataloader)))
     print(f"Fine-tuning for 1 epoch (warmup_steps={warmup_steps}) ...")
@@ -177,32 +193,56 @@ def evaluate(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Fine-tune BAAI/bge-base-en-v1.5 on SciFact with contrastive loss, then evaluate."
+        description="Fine-tune an embedding model on SciFact with MNRL or GISTEmbedLoss, then evaluate."
     )
     parser.add_argument("--dataset", default="data/scifact", help="Path to dataset directory")
     parser.add_argument("--split", default="test", help="Evaluation qrels split (default: test)")
     parser.add_argument(
+        "--loss",
+        choices=["gist", "mnrl"],
+        default="gist",
+        help="Training loss to use (default: gist)",
+    )
+    parser.add_argument(
+        "--base-model",
+        default="BAAI/bge-base-en-v1.5",
+        help="SentenceTransformers model to fine-tune",
+    )
+    parser.add_argument(
+        "--guide-model",
+        default="BAAI/bge-base-en-v1.5",
+        help="Frozen guide encoder used by GISTEmbedLoss",
+    )
+    parser.add_argument(
         "--model",
-        default="bge_mnrl_scifact_ft",
-        help="Model key used in result JSON (default: bge_base_scifact_ft)",
+        default=None,
+        help="Model key used for saved artifacts and result JSON; defaults from --loss",
     )
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--top-k", type=int, default=10)
     parser.add_argument("--output", default=None, help="Output JSON path (auto-derived if omitted)")
     parser.add_argument("--no-cache", action="store_true", help="Skip loading and saving corpus cache")
     args = parser.parse_args()
+    if args.model is None:
+        args.model = f"bge_{args.loss}_scifact_ft"
 
     project_root = Path(__file__).resolve().parents[1]
     dataset_dir = project_root / args.dataset
     results_dir = project_root / "results"
     results_dir.mkdir(exist_ok=True)
 
-    ft_model_path = project_root / "models" / "bge-base-scifact-ft"
+    ft_model_path = project_root / "models" / args.model.replace("_", "-")
 
     if ft_model_path.exists():
         print("Fine-tuned model found — skipping training, going straight to evaluation.")
     else:
-        train(dataset_dir, ft_model_path)
+        train(
+            dataset_dir,
+            ft_model_path,
+            loss_name=args.loss,
+            base_model_id=args.base_model,
+            guide_model_id=args.guide_model,
+        )
 
     evaluate(dataset_dir, ft_model_path, results_dir, args)
 
